@@ -36,6 +36,7 @@ type Group struct {
 }
 
 var (
+	// TODO 单机架构已可行，下一步处理分布式架构，原理就是增加一个注册中心，将用户、ws客户ID、连接信息绑定到一个公共的存储地
 	Groups = make(map[string]*Group)
 	groupLock sync.Mutex
 )
@@ -68,9 +69,11 @@ func NewConnection(wsConn *websocket.Conn) (conn *Connection, err error) {
 func WriteMessageAll(groupId string, outMessage message.OutMessage) (err error) {
 	data, err := json.Marshal(outMessage)
 	if err == nil {
-		for c := range Groups[groupId].Clients {
-			if err = Groups[groupId].Clients[c].wsConn.WriteMessage(websocket.TextMessage, data); err != nil {
-				Groups[groupId].Clients[c].Close()
+		if _,ok := Groups[groupId]; ok {
+			for uid := range Groups[groupId].Clients {
+				if err = Groups[groupId].Clients[uid].wsConn.WriteMessage(websocket.TextMessage, data); err != nil {
+					Groups[groupId].Clients[uid].Close()
+				}
 			}
 		}
 	}

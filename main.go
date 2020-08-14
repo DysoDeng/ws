@@ -16,15 +16,18 @@ func main() {
 
 	http.HandleFunc("/ws", server.WsHandler)
 	http.HandleFunc("/ws/api", func(writer http.ResponseWriter, request *http.Request) {
-		groups := connection.Groups
-		err := groups["123"].Clients[1].WriteMessage(message.OutMessage{
-			Code: 0,
-			Data: "这是接口发送的消息",
-			Error: "",
-			MessageType: message.TypeMessage,
-		})
-		if err != nil {
 
+		query := request.URL.Query()
+		gid := query.Get("gid")
+
+		if gid != "" {
+			err := connection.WriteMessageAll(gid, message.OutMessage{
+				Code: 0,
+				Data: "这是接口发送的消息",
+				Error: "",
+				MessageType: message.TypeMessage,
+			})
+			log.Println(err)
 		}
 
 	})
