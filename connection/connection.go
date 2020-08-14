@@ -24,17 +24,19 @@ type Connection struct {
 	mutex		sync.Mutex
 	// 连接是否被关闭
 	isClosed	bool
+	// 用户ID
+	userId		int64
 	// 加入的群组
 	groups		map[string]bool
 }
 
 // 群信息
 type Group struct {
-	clients map[*Connection]bool
+	Clients map[int64]*Connection
 }
 
 var (
-	groups = make(map[string]*Group)
+	Groups = make(map[string]*Group)
 	groupLock sync.Mutex
 )
 
@@ -62,26 +64,41 @@ func NewConnection(wsConn *websocket.Conn) (conn *Connection, err error) {
 	return
 }
 
-// 加入群组
-func (conn *Connection) AddGroup(groupId string) {
-	groupLock.Lock() // 互斥锁
-	if _, ok := groups[groupId]; ok {
-		groups[groupId].clients[conn] = true
-	} else {
-		groups[groupId] = &Group{
-			clients:   make(map[*Connection]bool),
+// 消息群发
+func WriteMessageAll(groupId string, outMessage message.OutMessage) (err error) {
+	data, err := json.Marshal(outMessage)
+	if err == nil {
+		for c := range Groups[groupId].Clients {
+			if err = Groups[groupId].Clients[c].wsConn.WriteMessage(websocket.TextMessage, data); err != nil {
+				Groups[groupId].Clients[c].Close()
+			}
 		}
-		groups[groupId].clients[conn] = true
+	}
+
+	return
+}
+
+// 加入群组
+func (conn *Connection) AddGroup(groupId string, userId int64) {
+	groupLock.Lock() // 互斥锁
+	if _, ok := Groups[groupId]; ok {
+		Groups[groupId].Clients[userId] = conn
+	} else {
+		Groups[groupId] = &Group{
+			Clients:   make(map[int64]*Connection),
+		}
+		Groups[groupId].Clients[userId] = conn
 	}
 	conn.groups[groupId] = true
+	conn.userId = userId
 	groupLock.Unlock()
 }
 
 // 退出群组
 func (conn *Connection) ExitGroup(groupId string) {
 	if _, ok := conn.groups[groupId]; ok {
-		if _, o := groups[groupId].clients[conn]; o {
-			delete(groups[groupId].clients, conn)
+		if _, o := Groups[groupId].Clients[conn.userId]; o {
+			delete(Groups[groupId].Clients, conn.userId)
 		}
 	}
 }
@@ -110,20 +127,6 @@ func (conn *Connection) WriteMessage(outMessage message.OutMessage) (err error) 
 	return
 }
 
-// 消息群发
-func (conn *Connection) WriteMessageAll(groupId string, outMessage message.OutMessage) (err error) {
-	data, err := json.Marshal(outMessage)
-	if err == nil {
-		for c := range groups[groupId].clients {
-			if err = c.wsConn.WriteMessage(websocket.TextMessage, data); err != nil {
-				c.Close()
-			}
-		}
-	}
-
-	return
-}
-
 // 关闭连接
 func (conn *Connection) Close() {
 	// 线程安全的Close，可以并发多次调用也叫做可重入的Close
@@ -132,8 +135,10 @@ func (conn *Connection) Close() {
 	if !conn.isClosed {
 		// 退出群组
 		for g := range conn.groups {
-			if _,ok := groups[g]; ok {
-				delete(groups[g].clients, conn)
+			if _,ok := Groups[g]; ok {
+				if _,ok := Groups[g].Clients[conn.userId]; ok {
+					delete(Groups[g].Clients, conn.userId)
+				}
 			}
 		}
 		// 关闭chan,但是chan只能关闭一次

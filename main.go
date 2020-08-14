@@ -7,12 +7,27 @@ import (
 	"os"
 	"os/signal"
 	"time"
+	"ws/connection"
+	"ws/message"
 	"ws/server"
 )
 
 func main() {
 
 	http.HandleFunc("/ws", server.WsHandler)
+	http.HandleFunc("/ws/api", func(writer http.ResponseWriter, request *http.Request) {
+		groups := connection.Groups
+		err := groups["123"].Clients[1].WriteMessage(message.OutMessage{
+			Code: 0,
+			Data: "这是接口发送的消息",
+			Error: "",
+			MessageType: message.TypeMessage,
+		})
+		if err != nil {
+
+		}
+
+	})
 
 	serve := http.Server{
 		Addr: ":8888",

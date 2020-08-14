@@ -7,6 +7,11 @@ import (
 	"ws/message"
 )
 
+type User struct {
+	Id			int64	`json:"id"`
+	Username 	string	`json:"username"`
+}
+
 // 服务分发
 func Service(conn *connection.Connection, inMessage message.InMessage) (err error) {
 	// TODO Token鉴权
@@ -53,19 +58,29 @@ func Service(conn *connection.Connection, inMessage message.InMessage) (err erro
 		}
 		break
 	case "in_group": // 进入群
-		conn.AddGroup("123")
-		if err = conn.WriteMessageAll("123", message.OutMessage{
-			Code:        0,
-			Data:        "我进群啦",
-			Error:       "",
-			MessageType: message.TypeMessage,
-		}); err != nil {
-			return
+		switch inMessage.Data.(type) {
+		case map[string]interface{}:
+			var user User
+			if err := mapstructure.Decode(inMessage.Data, &user); err == nil {
+				if user.Id > 0 {
+					conn.AddGroup("123", user.Id)
+
+					if err = connection.WriteMessageAll("123", message.OutMessage{
+						Code:        0,
+						Data:        "用户["+user.Username+"]进入房间",
+						Error:       "",
+						MessageType: message.TypeMessage,
+					}); err != nil {
+
+					}
+				}
+			}
 		}
+
 		break
 	case "exit_group": // 退出群
 		conn.ExitGroup("123")
-		if err = conn.WriteMessageAll("123", message.OutMessage{
+		if err = connection.WriteMessageAll("123", message.OutMessage{
 			Code:        0,
 			Data:        "我退出群啦",
 			Error:       "",
@@ -74,7 +89,7 @@ func Service(conn *connection.Connection, inMessage message.InMessage) (err erro
 			return
 		}
 	case "message":
-		if err = conn.WriteMessageAll("123", message.OutMessage{
+		if err = connection.WriteMessageAll("123", message.OutMessage{
 			Code:        0,
 			Data:        inMessage.Data,
 			Error:       "",
