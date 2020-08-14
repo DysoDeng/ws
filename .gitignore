@@ -1,0 +1,11 @@
+/.idea
+/.vscode
+/ws.exe
+/ws.exe~
+/ws
+/ws~
+/go_build_main_go
+/lastupdate.tmp
+.env
+env.sh
+docker-compose.yml
